@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🎂 劉倪均大壽星專屬：俄羅斯方塊 🎁</title>
+    <style>
+        body { background: #1e1e24; color: #fff; font-family: 'Microsoft JhengHei', sans-serif; text-align: center; margin: 0; padding: 20px; }
+        h1 { color: #feca57; text-shadow: 0 0 10px rgba(254, 202, 87, 0.5); margin-bottom: 5px; }
+        .subtitle { color: #ff6b6b; font-size: 18px; font-weight: bold; margin-top: 0; }
+        .container { display: flex; justify-content: center; align-items: flex-start; gap: 30px; margin-top: 15px; }
+        canvas { border: 4px solid #feca57; background: #111; box-shadow: 0 0 25px rgba(0,0,0,0.7); border-radius: 4px; }
+        .info { background: #341f97; padding: 20px; border-radius: 12px; text-align: left; max-width: 280px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .stat-box { font-size: 20px; font-weight: bold; color: #feca57; margin: 10px 0; }
+        .next-box { background: #5f27cd; padding: 10px; border-radius: 8px; margin-top: 15px; text-align: center; font-size: 18px; color: #00ffcc; font-family: monospace; }
+        .tip { font-size: 13px; color: #c8d6e5; line-height: 1.6; }
+        
+        /* 啟動對話框遮罩 */
+        #startModal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 999; }
+        .modal-content { background: #341f97; padding: 40px; border-radius: 20px; border: 4px solid #feca57; box-shadow: 0 0 30px rgba(254,202,87,0.4); max-width: 450px; text-align: center; }
+        .start-btn { background: #ff4757; color: white; border: none; padding: 15px 40px; font-size: 22px; font-weight: bold; border-radius: 10px; cursor: pointer; box-shadow: 0 5px 0 #ff2233; transition: 0.1s; margin-top: 20px; }
+        .start-btn:active { transform: translateY(5px); box-shadow: none; }
+    </style>
+</head>
+<body>
+
+    <div id="startModal">
+        <div class="modal-content">
+            <h2 style="color: #feca57; margin-top: 0; font-size: 28px;">🥳 劉倪均生日快樂！🎂</h2>
+            <p style="font-size: 16px; line-height: 1.6;">歡迎來到大壽星限定的俄羅斯方塊大考驗！<br><br>系統已經在下方排好了經典殘局。<br>你一共有 <b>50 個方塊</b> 的機會，只要在過程中<b>達到 100 分</b>（消一行 10 分）或是將畫面<b>完全清空</b>，即可解鎖終極生日禮物！</p>
+            <button class="start-btn" onclick="startGame()">開始挑戰 🎁</button>
+        </div>
+    </div>
+
+    <h1>🧩 劉倪均生日限定：「100分獲勝」挑戰！ 🎁</h1>
+    <p class="subtitle">消除一行得 10 分，滿 100 分或全消除即可解鎖大獎！</p>
+    <p style="color: #c8d6e5;">操作：⬅ ➡ 移動 / ⬆ 旋轉 / ⬇ 加速下落</p>
+
+    <div class="container">
+        <canvas id="tetris" width="250" height="500"></canvas>
+
+        <div class="info">
+            <div class="stat-box">🏆 目前得分：<span id="scoreDisplay">0</span> / 100 分</div>
+            <div class="stat-box">📦 剩餘方塊：<span id="piecesDisplay">50</span> 個</div>
+            <hr style="border-color: #5f27cd;">
+            <h3>💡 關卡說明</h3>
+            <p class="tip">一開場畫面上就有不規則殘局，請善用方塊進行消除。方塊的掉落順序已固定，可以動腦算看看喔！</p>
+            <p><strong>🔮 預告下一個方塊：</strong></p>
+            <div id="nextPieceDisplay" class="next-box">等待開始...</div>
+        </div>
+    </div>
+
+<script>
+const canvas = document.getElementById('tetris');
+const context = canvas.getContext('2d');
+const grid = 25; 
+
+// 1. 初始化 10x20 棋盤
+const arena = Array.from({length: 20}, () => Array(10).fill(0));
+
+// 2. 初始殘局設定
+function initArenaPuzzle() {
+    for(let i=0; i<20; i++) arena[i].fill(0);
+    arena[17] = [0, 0, 0, 0, 0, 0, 0, 1, 1, 0];
+    arena[18] = [1, 1, 1, 1, 0, 0, 0, 1, 1, 1];
+    arena[19] = [1, 1, 1, 1, 0, 0, 1, 1, 1, 1];
+}
+
+// 3. 定義標準方塊
+const O = [[3,3],[3,3]];
+const T = [[0,4,0],[4,4,4],[0,0,0]];
+const I = [[0,5,0,0],[0,5,0,0],[0,5,0,0],[0,5,0,0]];
+const L = [[6,0,0],[6,6,6],[0,0,0]];
+const J = [[0,0,7],[7,7,7],[0,0,0]];
+
+// 4. 固定產生 50 個方塊的順序 (解謎前三發固定，後面循環方便消除)
+const basePattern = [O, T, I, L, J, O, I, T, J, L];
+let sequence = [O, T, I]; // 前 3 個為完美解開開頭殘局的必殺組合
+while(sequence.length < 50) {
+    sequence = sequence.concat(basePattern);
+}
+sequence = sequence.slice(0, 50); // 確保剛好 50 個
+
+let currentOrderIndex = 0;
+let score = 0;
+let gameRunning = false;
+
+const player = {
+    pos: {x: 4, y: 0},
+    matrix: sequence[0],
+    colorCode: 3
+};
+
+// 點擊對話框開始遊戲
+function startGame() {
+    document.getElementById('startModal').style.display = 'none';
+    initArenaPuzzle();
+    score = 0;
+    currentOrderIndex = 0;
+    gameRunning = true;
+    player.matrix = sequence[0];
+    player.colorCode = 3;
+    player.pos.y = 0;
+    player.pos.x = 4;
+    
+    updateDisplays();
+    update();
+}
+
+function updateDisplays() {
+    document.getElementById('scoreDisplay').innerText = score;
+    document.getElementById('piecesDisplay').innerText = sequence.length - currentOrderIndex;
+    
+    const nextBox = document.getElementById('nextPieceDisplay');
+    if (currentOrderIndex + 1 < sequence.length) {
+        nextBox.innerText = `第 ${currentOrderIndex + 2} / 50 個方塊`;
+    } else {
+        nextBox.innerText = "最後一個方塊！";
+    }
+}
+
+function playerReset() {
+    currentOrderIndex++;
+
+    // 檢查方塊是否用完了
+    if (currentOrderIndex >= sequence.length) {
+        gameRunning = false;
+        alert(`❌ 遺憾！50個方塊用完了卻沒達到 100 分（目前 ${score} 分）！\n倪均別氣餒，重來一次試試看！`);
+        document.getElementById('startModal').style.display = 'flex';
+        return;
+    }
+    
+    player.matrix = sequence[currentOrderIndex];
+    player.colorCode = (currentOrderIndex % 6) + 2; 
+    player.pos.y = 0;
+    player.pos.x = 4;
+
+    if (collide(arena, player)) {
+        gameRunning = false;
+        alert("❌ 沒關係寶包！再挑戰一次吧！");
+        document.getElementById('startModal').style.display = 'flex';
+    }
+    updateDisplays();
+}
+
+const colors = [
+    null,
+    '#747d8c', // 1: 殘局灰色
+    '#ff4757', // 2: 紅
+    '#feca57', // 3: 黃
+    '#a55eea', // 4: 紫
+    '#4bcffa', // 5: 藍
+    '#ff6b6b', // 6: 淺紅
+    '#10ac84'  // 7: 綠
+];
+
+function drawMatrix(matrix, offset, isPlayer = false) {
+    matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value !== 0) {
+                context.fillStyle = isPlayer ? colors[player.colorCode] : colors[value];
+                context.fillRect((x + offset.x) * grid, (y + offset.y) * grid, grid - 1, grid - 1);
+            }
+        });
+    });
+}
+
+function draw() {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    drawMatrix(arena, {x: 0, y: 0}, false); 
+    drawMatrix(player.matrix, player.pos, true); 
+}
+
+function collide(arena, player) {
+    const [m, o] = [player.matrix, player.pos];
+    for (let y = 0; y < m.length; ++y) {
+        for (let x = 0; x < m[y].length; ++x) {
+            if (m[y][x] !== 0 && (arena[y + o.y] && arena[y + o.y][x + o.x]) !== 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function merge(arena, player) {
+    player.matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value !== 0) {
+                arena[y + player.pos.y][x + player.pos.x] = player.colorCode;
+            }
+        });
+    });
+}
+
+function arenaSweep() {
+    let rowsCleared = 0;
+    for (let y = arena.length - 1; y >= 0; --y) {
+        if (arena[y].every(value => value !== 0)) {
+            const row = arena.splice(y, 1)[0].fill(0);
+            arena.unshift(row);
+            ++y; 
+            rowsCleared++;
+        }
+    }
+    
+    // 計算得分（消一行得10分）
+    if (rowsCleared > 0) {
+        score += rowsCleared * 10;
+        updateDisplays();
+    }
+
+    // 檢查是否全空 (全消除機制保留)
+    let isPerfectClear = true;
+    for (let y = 0; y < arena.length; y++) {
+        for (let x = 0; x < arena[y].length; x++) {
+            if (arena[y][x] !== 0) { isPerfectClear = false; break; }
+        }
+    }
+
+    // 🏆 獲勝條件：滿 100 分，或成功觸發完美全消
+    if (score >= 100 || isPerfectClear) {
+        gameRunning = false;
+        draw();
+        setTimeout(() => {
+            // 🎁 生日驚喜開獎台詞
+            alert(`🎉🎉【恭喜大壽星劉倪均通關成功！！！】🎉🎉\n\n唉唷威啊！怎麼這麼厲害？？？！拿到了 ${score} 分！\n\n祝你生日快樂！！恭喜你解鎖你的生日禮物！🎁🎂`);
+        }, 50);
+        return true;
+    }
+    return false;
+}
+
+function rotate(matrix) {
+    for (let y = 0; y < matrix.length; ++y) {
+        for (let x = 0; x < y; ++x) {
+            [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+        }
+    }
+    matrix.forEach(row => row.reverse());
+}
+
+let dropCounter = 0;
+let lastTime = 0;
+function update(time = 0) {
+    if (!gameRunning) return;
+    
+    const deltaTime = time - lastTime;
+    lastTime = time;
+    dropCounter += deltaTime;
+    
+    if (dropCounter > 1000) { // 1秒掉一格，標準速度更具挑戰性
+        playerDrop();
+    }
+    draw();
+    requestAnimationFrame(update);
+}
+
+function playerDrop() {
+    if (!gameRunning) return;
+    player.pos.y++;
+    if (collide(arena, player)) {
+        player.pos.y--;
+        merge(arena, player);
+        const win = arenaSweep();
+        if (!win) {
+            playerReset();
+        }
+    }
+    dropCounter = 0;
+}
+
+window.addEventListener('keydown', event => {
+    if (!gameRunning) return;
+    if (event.key === 'ArrowLeft') {
+        player.pos.x--;
+        if (collide(arena, player)) player.pos.x++;
+    } else if (event.key === 'ArrowRight') {
+        player.pos.x++;
+        if (collide(arena, player)) player.pos.x--;
+    } else if (event.key === 'ArrowDown') {
+        playerDrop();
+    } else if (event.key === 'ArrowUp') {
+        rotate(player.matrix);
+        if (collide(arena, player)) rotate(player.matrix);
+    }
+});
+</script>
+</body>
+</html>
